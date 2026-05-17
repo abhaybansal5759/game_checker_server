@@ -1,0 +1,8 @@
+.env
+secrets/
+*.json.key
+
+*.json
+firebase-service-account.json
+bin/
+tmp/

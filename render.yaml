@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: checkers-server
+    runtime: go
+    plan: free          # Render free tier
+    buildCommand: go build -o checkers-server .
+    startCommand: ./checkers-server
+    envVars:
+      - key: PORT
+        value: 10000         # Render assigns this automatically
+      - key: MONGO_URI
+        sync: false          # Set this manually in Render dashboard (MongoDB Atlas URI)
+      - key: DB_NAME
+        value: checkers
+      - key: JWT_SECRET
+        generateValue: true  # Render auto-generates a secure random value
+      - key: FIREBASE_PROJECT_ID
+        sync: false          # Set manually if using Google login
+      - key: BOT_DEPTH
+        value: "4"
+      - key: RATE_PER_SEC
+        value: "10"
+      - key: RATE_BURST
+        value: "30"
+      - key: AUTH_RATE_PER_SEC
+        value: "2"
+      - key: AUTH_BURST
+        value: "5"
+      - key: WS_RATE_PER_SEC
+        value: "5"
+      - key: WS_BURST
+        value: "10"
