@@ -122,6 +122,10 @@ func (s *Server) wsReadLoop(pc *PlayerConn, sess *GameSession, userID, color str
 			return
 		}
 
+		if sess.IsBot {
+			log.Printf("[bot-game %s] client→server (%s/%s): %s", sess.ID, userID, color, raw)
+		}
+
 		// Rate limit incoming messages
 		if !pc.Allow() {
 			_ = pc.Send(WSMessage{Type: "error", Payload: ErrorPayload{Message: "message rate limit exceeded"}})

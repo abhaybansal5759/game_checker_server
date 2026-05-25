@@ -327,20 +327,43 @@ func (s *Server) handleLeaveMatchmaking(w http.ResponseWriter, r *http.Request) 
 }
 
 // POST /game/bot
+// func (s *Server) handleStartBotGame(w http.ResponseWriter, r *http.Request) {
+// 	userID := userIDFromCtx(r)
+
+// 	if s.sessions.HasActiveGame(userID) {
+// 		writeError(w, http.StatusConflict, "already in an active game")
+// 		return
+// 	}
+
+// 	sess := s.matchmaker.CreateBotGame(userID, s.bot, newGameID)
+// 	writeJSON(w, http.StatusCreated, StartBotGameResp{
+// 		GameID: sess.ID,
+// 		Color:  "white",
+// 	})
+// }
+
 func (s *Server) handleStartBotGame(w http.ResponseWriter, r *http.Request) {
-	userID := userIDFromCtx(r)
+    userID := userIDFromCtx(r)
 
-	if s.sessions.HasActiveGame(userID) {
-		writeError(w, http.StatusConflict, "already in an active game")
-		return
-	}
+    // If already in a game that is OVER → force remove it immediately
+    if sess, ok := s.sessions.GetByUser(userID); ok {
+        if sess.Game.IsOver() {
+            // Game already finished, just clean it up now
+            s.sessions.Remove(sess.ID)
+        } else {
+            // Game still in progress
+            writeError(w, http.StatusConflict, "already in an active game")
+            return
+        }
+    }
 
-	sess := s.matchmaker.CreateBotGame(userID, s.bot, newGameID)
-	writeJSON(w, http.StatusCreated, StartBotGameResp{
-		GameID: sess.ID,
-		Color:  "white",
-	})
+    sess := s.matchmaker.CreateBotGame(userID, s.bot, newGameID)
+    writeJSON(w, http.StatusCreated, StartBotGameResp{
+        GameID: sess.ID,
+        Color:  "white",
+    })
 }
+
 
 // POST /game/:id/resign
 func (s *Server) handleResign(w http.ResponseWriter, r *http.Request) {
