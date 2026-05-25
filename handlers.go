@@ -67,6 +67,22 @@ func userIDFromCtx(r *http.Request) string {
 	return v
 }
 
+// activeGame returns (game_id, is_bot) for an in-progress session this user
+// is a participant in, or ("", false) if none. In-memory only — sessions
+// don't survive restarts, which matches current matchmaking behavior.
+func (s *Server) activeGame(userID string) (string, bool) {
+	sess, ok := s.sessions.GetByUser(userID)
+	if !ok {
+		return "", false
+	}
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	if sess.Game.IsOver() {
+		return "", false
+	}
+	return sess.ID, sess.IsBot
+}
+
 // ─── Auth Handlers ────────────────────────────────────────────────────────────
 
 // POST /auth/guest
@@ -101,10 +117,13 @@ func (s *Server) handleGuestLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	gameID, isBot := s.activeGame(userID)
 	writeJSON(w, http.StatusCreated, GuestLoginResp{
-		Token:       token,
-		UserID:      userID,
-		DisplayName: name,
+		Token:           token,
+		UserID:          userID,
+		DisplayName:     name,
+		ActiveGameID:    gameID,
+		ActiveGameIsBot: isBot,
 	})
 }
 
@@ -192,12 +211,15 @@ func (s *Server) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	gameID, isBot := s.activeGame(userID)
 	writeJSON(w, http.StatusOK, GoogleLoginResp{
-		Token:       token,
-		UserID:      userID,
-		DisplayName: user.DisplayName,
-		Email:       user.Email,
-		Merged:      merged,
+		Token:           token,
+		UserID:          userID,
+		DisplayName:     user.DisplayName,
+		Email:           user.Email,
+		Merged:          merged,
+		ActiveGameID:    gameID,
+		ActiveGameIsBot: isBot,
 	})
 }
 
@@ -216,6 +238,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
             w.Header().Set("X-New-Token", newToken)
         }
     }
+	user.ActiveGameID, user.ActiveGameIsBot = s.activeGame(userID)
 	writeJSON(w, http.StatusOK, user)
 }
 
@@ -437,10 +460,21 @@ func (s *Server) handleGetGame(w http.ResponseWriter, r *http.Request) {
 func (s *Server) finalizeGame(sess *GameSession) {
 	winner := sess.Game.Winner()
 
+	kind := "pvp"
+	if sess.IsBot {
+		kind = "bot"
+	}
+	log.Printf("[finalize %s] game=%s kind=%s winner=%s moves=%d white=%s black=%s",
+		sess.ID, sess.ID, kind, winner, sess.Game.MoveCount, sess.WhiteID, sess.BlackID)
+
 	whiteUser, _ := s.db.GetUserByID(sess.WhiteID)
 	var blackUser *User
 	if !sess.IsBot {
 		blackUser, _ = s.db.GetUserByID(sess.BlackID)
+	}
+	if !sess.IsBot && (whiteUser == nil || blackUser == nil) {
+		log.Printf("[finalize %s] WARN missing user lookup: whiteUser=%v blackUser=%v — rating update will be skipped (record still saved)",
+			sess.ID, whiteUser != nil, blackUser != nil)
 	}
 
 	whiteRatingBefore := DefaultRating
@@ -504,26 +538,29 @@ func (s *Server) finalizeGame(sess *GameSession) {
 		}
 	}
 
-	blackIDForRecord := sess.BlackID
-	if sess.IsBot {
-		blackIDForRecord = "bot"
-	}
-
-	rec := &GameRecord{
-		GameID:            sess.ID,
-		WhiteUserID:       sess.WhiteID,
-		BlackUserID:       blackIDForRecord,
-		Winner:            winner,
-		WhiteRatingBefore: whiteRatingBefore,
-		BlackRatingBefore: blackRatingBefore,
-		WhiteRatingAfter:  whiteRatingAfter,
-		BlackRatingAfter:  blackRatingAfter,
-		IsBotGame:         sess.IsBot,
-		Moves:             sess.Game.MoveCount,
-		CreatedAt:         time.Now(),
-	}
-	if err := s.db.SaveGameRecord(rec); err != nil {
-		log.Printf("save game record: %v", err)
+	// Bot games are not persisted: they don't affect rating, don't update
+	// win/loss counters, and BlackUserID would just be the literal "bot".
+	if !sess.IsBot {
+		rec := &GameRecord{
+			GameID:            sess.ID,
+			WhiteUserID:       sess.WhiteID,
+			BlackUserID:       sess.BlackID,
+			Winner:            winner,
+			WhiteRatingBefore: whiteRatingBefore,
+			BlackRatingBefore: blackRatingBefore,
+			WhiteRatingAfter:  whiteRatingAfter,
+			BlackRatingAfter:  blackRatingAfter,
+			IsBotGame:         false,
+			Moves:             sess.Game.MoveCount,
+			CreatedAt:         time.Now(),
+		}
+		if err := s.db.SaveGameRecord(rec); err != nil {
+			log.Printf("[finalize %s] save game record FAILED: %v", sess.ID, err)
+		} else {
+			log.Printf("[finalize %s] record saved (pvp)", sess.ID)
+		}
+	} else {
+		log.Printf("[finalize %s] record skipped (bot game)", sess.ID)
 	}
 
 	// Remove from session store after short delay (let WS messages drain)

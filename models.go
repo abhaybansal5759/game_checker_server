@@ -32,6 +32,10 @@ type User struct {
 	Draws       int                `bson:"draws"              json:"draws"`
 	CreatedAt   time.Time          `bson:"created_at"         json:"created_at"`
 	UpdatedAt   time.Time          `bson:"updated_at"         json:"updated_at"`
+
+	// Transient (not persisted): set by handlers from the in-memory session store.
+	ActiveGameID    string `bson:"-" json:"active_game_id"`
+	ActiveGameIsBot bool   `bson:"-" json:"active_game_is_bot"`
 }
 
 // ─── JWT Claims ──────────────────────────────────────────────────────────────
@@ -79,9 +83,11 @@ type GuestLoginReq struct {
 }
 
 type GuestLoginResp struct {
-	Token       string `json:"token"`
-	UserID      string `json:"user_id"`
-	DisplayName string `json:"display_name"`
+	Token           string `json:"token"`
+	UserID          string `json:"user_id"`
+	DisplayName     string `json:"display_name"`
+	ActiveGameID    string `json:"active_game_id"`
+	ActiveGameIsBot bool   `json:"active_game_is_bot"`
 }
 
 type GoogleLoginReq struct {
@@ -90,11 +96,13 @@ type GoogleLoginReq struct {
 }
 
 type GoogleLoginResp struct {
-	Token       string `json:"token"`
-	UserID      string `json:"user_id"`
-	DisplayName string `json:"display_name"`
-	Email       string `json:"email"`
-	Merged      bool   `json:"merged"` // true if guest account was merged
+	Token           string `json:"token"`
+	UserID          string `json:"user_id"`
+	DisplayName     string `json:"display_name"`
+	Email           string `json:"email"`
+	Merged          bool   `json:"merged"` // true if guest account was merged
+	ActiveGameID    string `json:"active_game_id"`
+	ActiveGameIsBot bool   `json:"active_game_is_bot"`
 }
 
 type UpdateNameReq struct {
