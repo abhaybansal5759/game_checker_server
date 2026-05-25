@@ -209,6 +209,13 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "user not found")
 		return
 	}
+	  // Auto-refresh: if guest token expires within 7 days, silently issue a new one
+    provider, _ := r.Context().Value(ctxProvider).(string)
+    if provider == string(ProviderGuest) {
+        if newToken, ok := s.tokens.MaybeRefresh(r.Header.Get("Authorization")); ok {
+            w.Header().Set("X-New-Token", newToken)
+        }
+    }
 	writeJSON(w, http.StatusOK, user)
 }
 

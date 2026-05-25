@@ -109,3 +109,29 @@ func (ts *TokenService) MaybeVerify(tokenStr string) (string, AuthProvider, erro
 	}
 	return ts.Verify(tokenStr)
 }
+
+
+// MaybeRefresh checks if token expires within 7 days.
+// If so, silently issues a fresh one. Returns ("", false) if no refresh needed.
+func (ts *TokenService) MaybeRefresh(tokenStr string) (string, bool) {
+    tokenStr = strings.TrimPrefix(tokenStr, "Bearer ")
+    tok, err := jwt.ParseWithClaims(tokenStr, &sessionClaims{}, func(t *jwt.Token) (interface{}, error) {
+        return ts.secret, nil
+    })
+    if err != nil || !tok.Valid {
+        return "", false
+    }
+    claims, ok := tok.Claims.(*sessionClaims)
+    if !ok {
+        return "", false
+    }
+    // Refresh if less than 7 days remaining
+    if time.Until(claims.ExpiresAt.Time) < 7*24*time.Hour {
+        newToken, err := ts.Issue(claims.UserID, claims.Provider)
+        if err != nil {
+            return "", false
+        }
+        return newToken, true
+    }
+    return "", false
+}
