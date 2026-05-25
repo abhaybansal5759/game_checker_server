@@ -186,7 +186,13 @@ func (g *CheckersGame) jumpSequences(b Board, r, c, piece int, soFar [][2]int) [
 		// Try to continue jumping
 		continuations := g.jumpSequences(nb, nr, nc, promotedPiece, jumped)
 		if len(continuations) > 0 {
-			found = append(found, continuations...)
+			// Continuations were built from (nr,nc); rewrite their origin
+			// to *this* call's (r,c) so it propagates up to the true start.
+			for _, cont := range continuations {
+				cont.FromRow = r
+				cont.FromCol = c
+				found = append(found, cont)
+			}
 		} else {
 			// Terminal jump
 			found = append(found, Move{

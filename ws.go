@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -215,9 +216,21 @@ func (s *Server) handleWSMove(pc *PlayerConn, sess *GameSession, userID, color s
 
 	errStr := sess.Game.ApplyMove(move)
 	if errStr != "" {
+		// Log rejected moves with the legal alternatives from that square — the
+		// pair makes client/server desync or coord bugs obvious at a glance.
+		var fromSquare []string
+		for _, lm := range legal {
+			if lm.FromRow == move.FromRow && lm.FromCol == move.FromCol {
+				fromSquare = append(fromSquare, fmt.Sprintf("(%d,%d)", lm.ToRow, lm.ToCol))
+			}
+		}
+		log.Printf("[game %s] REJECT %s (%d,%d)->(%d,%d): %s; legal from src: %v",
+			sess.ID, color, mv.FromRow, mv.FromCol, mv.ToRow, mv.ToCol, errStr, fromSquare)
 		_ = pc.Send(WSMessage{Type: "error", Payload: ErrorPayload{Message: errStr}})
 		return
 	}
+	log.Printf("[game %s] move %s (%d,%d)->(%d,%d) jumped=%d",
+		sess.ID, color, mv.FromRow, mv.FromCol, mv.ToRow, mv.ToCol, len(move.JumpedSquares))
 
 	// Broadcast new state to both players
 	lastMoveInfo := &MoveInfo{
