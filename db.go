@@ -16,6 +16,7 @@ import (
 type DB struct {
 	client *mongo.Client
 	db     *mongo.Database
+	dbName string
 	users  *mongo.Collection
 	games  *mongo.Collection
 }
@@ -41,11 +42,16 @@ func NewDB(uri, dbName string) (*DB, error) {
 	d := &DB{
 		client: client,
 		db:     database,
+		dbName: dbName,
 		users:  database.Collection("users"),
 		games:  database.Collection("games"),
 	}
 	if err := d.createIndexes(); err != nil {
 		return nil, fmt.Errorf("indexes: %w", err)
+	}
+	// Create chat message indexes
+	if err := d.EnsureChatIndexes(); err != nil {
+		log.Printf("warning: chat indexes: %v", err)
 	}
 	log.Println("db: connected to MongoDB")
 	return d, nil

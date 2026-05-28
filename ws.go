@@ -146,6 +146,9 @@ func (s *Server) wsReadLoop(pc *PlayerConn, sess *GameSession, userID, color str
 		case "move":
 			s.handleWSMove(pc, sess, userID, color, msg.Payload)
 
+		case "chat":
+			s.handleChatMessage(pc, sess, userID, color, msg.Payload)
+
 		case "resign":
 			sess.mu.Lock()
 			if !sess.Game.IsOver() {

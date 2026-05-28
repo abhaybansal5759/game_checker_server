@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -77,6 +78,9 @@ func main() {
 	mux.Handle("/game/bot", globalLimit(requireAuth(http.HandlerFunc(methodOnly("POST", srv.handleStartBotGame)))))
 	mux.Handle("/game/", globalLimit(requireAuth(http.HandlerFunc(srv.routeGame))))
 
+	// Chat
+	mux.Handle("/api/game/", globalLimit(requireAuth(http.HandlerFunc(srv.routeGameAPI))))
+
 	// WebSocket (auth via query param)
 	mux.Handle("/ws", globalLimit(http.HandlerFunc(srv.handleWS)))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
@@ -135,6 +139,15 @@ func (s *Server) routeGame(w http.ResponseWriter, r *http.Request) {
 		len(r.URL.Path) > len("/game//resign") && r.URL.Path[len(r.URL.Path)-7:] == "/resign":
 		s.handleResign(w, r)
 	default:
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+	}
+}
+
+// routeGameAPI dispatches /api/game/<id>/messages
+func (s *Server) routeGameAPI(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/messages") && r.Method == http.MethodGet {
+		s.handleGetChatMessages(w, r)
+	} else {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 	}
 }

@@ -467,6 +467,9 @@ func (s *Server) finalizeGame(sess *GameSession) {
 	log.Printf("[finalize %s] game=%s kind=%s winner=%s moves=%d white=%s black=%s",
 		sess.ID, sess.ID, kind, winner, sess.Game.MoveCount, sess.WhiteID, sess.BlackID)
 
+	// Cleanup chat messages for this game
+	s.cleanupChatMessages(sess.ID)
+
 	whiteUser, _ := s.db.GetUserByID(sess.WhiteID)
 	var blackUser *User
 	if !sess.IsBot {
